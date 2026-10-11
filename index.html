@@ -42,7 +42,7 @@ footer a{color:#4f8f68}
 </section>
 <header>
   <h1 class="title">Geordie Visser Watch</h1>
-  <p>Research notes on Jordi “Geordie” Visser — macro, AI &amp; crypto commentary · built 2026-10-12 07:19</p>
+  <p>Research notes on Jordi “Geordie” Visser — macro, AI &amp; crypto commentary · built 2026-10-12 08:50</p>
 </header>
 <main>
   <section id="thesis">
@@ -1526,7 +1526,8 @@ let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(resize,80)}
 })();
 }
 /* Jordi Visser hero v2: 3D code-glyph head (LeePerrySmith mesh + projected photo) spinning like a planet,
-   with code streams flowing into a glowing brain, and lightning arcing back to the skull. three.js r147. */
+   with a glowing brain inside, slow lightning arcing from brain to skull, and HUD-style glyph readouts on the head/visor. three.js r147.
+   v3: streams + glyph ring removed (v2 kept in hero3d_v2.js). */
 (()=>{
 const cv=document.getElementById('c'),hero=document.getElementById('hero');
 const qs=new URLSearchParams(location.search);
@@ -1578,11 +1579,8 @@ void main(){
  float lit=max(0.,dot(n,L));float b=val*mix(0.30+0.85*lit,0.72+0.38*lit,w*0.7); // softer light on the face keeps it recognisable
  b+=pow(1.-max(0.,n.z),2.2)*0.30;
  float hl=0.;
- for(int i=0;i<6;i++){vec4 e=uEv[i];float age=uTime-e.z;
-   if(e.w>0.&&age>0.&&age<1.6){float dl=abs(mod(lon-e.y+3.14159,6.28318)-3.14159);
-     hl+=(1.-smoothstep(0.03,0.06,abs(op.y-e.x)))*(1.-smoothstep(0.45,0.85,dl))*(1.-age/1.6)*smoothstep(0.,0.1,age)*0.75;}}
  for(int i=0;i<10;i++){vec4 hv=uHit[i];float age=uTime-hv.w;
-   if(age>0.&&age<0.9){float d=length(vP-hv.xyz);hl+=(1.-smoothstep(0.,0.75,d))*pow(1.-age/0.9,1.5)*1.6;}}
+   if(age>0.&&age<1.5){float d=length(vP-hv.xyz);hl+=(1.-smoothstep(0.,0.75,d))*pow(1.-age/1.5,1.5)*1.6;}}
  float neck=smoothstep(-2.25,-1.15,op.y);
  float base=(b+uFlash*0.06)*neck;b=(b+hl+uFlash*0.06)*neck;
  vec2 fc=gl_FragCoord.xy/uCell;vec2 cell=floor(fc),lc=fract(fc);
@@ -1672,33 +1670,37 @@ brainGlow.position.copy(BC);brainGlow.renderOrder=1;spin.add(brainGlow);
 const atmo=new T.Sprite(new T.SpriteMaterial({map:brainGlowTex,blending:T.AdditiveBlending,depthTest:false,depthWrite:false,transparent:true,opacity:0.10,color:0x22ff88}));
 atmo.scale.set(11,11,1);atmo.position.set(0,0,-3);atmo.renderOrder=0;tilt.add(atmo);
 const starData=[];for(let i=0;i<1400;i++){const u=rnd()*2-1,a=rnd()*6.283,r=60+rnd()*60,s=Math.sqrt(1-u*u);starData.push([r*s*Math.cos(a),r*u,r*s*Math.sin(a)-30,rnd()*6.28,0.4+rnd()*1.2]);}
-const stars=staticGlow(starData.map(s=>[s[0],s[1],s[2],0.5,s[4]*3,s[3]]),0);stars.material.uniforms.uFS.value=0;stars.material.uniforms.uF={value:0};scene.add(stars);
-const ringG=new T.Group();ringG.rotation.x=0.30;ringG.position.y=-0.1;tilt.add(ringG);
-const ring=pool(1500,true,{order:3,depthTest:true});ringG.add(ring.pts);
-const ringData=[];for(let i=0;i<1500;i++){const band=rnd()<0.7?0:1;ringData.push([rnd()*6.283,band?4.75+rnd()*0.35:3.55+rnd()*0.8,(rnd()-0.5)*0.06,(rnd()*NG)|0,0.25+rnd()*0.5]);}
-// ---------- streams, lightning, sparks ----------
-const streamPool=pool(1400,true,{order:4,col:0x55ffaa,core:0xf0fff4});spin.add(streamPool.pts);
+const stars=staticGlow(starData.map(s=>[s[0],s[1],s[2],0.22,s[4]*2.2,s[3]]),0);stars.material.uniforms.uFS.value=0;stars.material.uniforms.uF={value:0};scene.add(stars);
+// ---------- HUD readouts, lightning, sparks ----------
+const readPool=pool(900,true,{order:4,depthTest:true,col:0x6dffb0,core:0xf2fff6});spin.add(readPool.pts);
 const glow=pool(9000,false,{order:5});spin.add(glow.pts);
 const boltLineG=new T.BufferGeometry();const BL=new Float32Array(6*3000);boltLineG.setAttribute('position',new T.BufferAttribute(BL,3).setUsage(T.DynamicDrawUsage));
 const boltLineMat=new T.LineBasicMaterial({color:0xf2fff6,transparent:true,opacity:1,blending:T.AdditiveBlending,depthTest:false,depthWrite:false});
 const boltLines=new T.LineSegments(boltLineG,boltLineMat);boltLines.frustumCulled=false;boltLines.renderOrder=6;spin.add(boltLines);
-let streams=[],bolts=[],sparks=[],events=[],nextEv=0,lastBolt=-99,flash=0,evSlot=0,hitSlot=0,boltsFired=0;
+let readouts=[],bolts=[],sparks=[],nextRd=0,nextBolt=0,lastBolt=-99,flash=0,hitSlot=0,boltsFired=0;
 const V=new T.Vector3();
 function camObjDir(){const c=spin.worldToLocal(camera.position.clone());return c.normalize();}
 function nearestVert(y,lon){let best=-1,bd=1e9;for(let i=0;i<NV;i++){const py=pos[i*3+1]+PV.y;if(Math.abs(py-y)>0.09)continue;
   const l=Math.atan2(pos[i*3],pos[i*3+2]);let dl=Math.abs(((l-lon+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI);if(dl<bd){bd=dl;best=i;}}return best;}
-function spawnEvent(t){
-  const cd=camObjDir(),lonC=Math.atan2(cd.x,cd.z);
-  const y=0.2+rnd()*3.2,lon=lonC+(rnd()-0.5)*1.5;
-  const e=EV[evSlot];evSlot=(evSlot+1)%EV.length;e.set(y,lon,t,1);
-  const K=6+(rnd()*4|0),ev={t,left:K};events.push(ev);
-  for(let s=0;s<K;s++){const vi=nearestVert(y,lon+(rnd()-0.5)*1.3);if(vi<0){ev.left--;continue;}
-    const a=new T.Vector3(pos[vi*3],pos[vi*3+1],pos[vi*3+2]).addScaledVector(new T.Vector3(nrm[vi*3],nrm[vi*3+1],nrm[vi*3+2]),0.03);
-    const d=a.clone().sub(BC).normalize();const b=BC.clone().add(new T.Vector3(d.x*BR.x*0.5,d.y*BR.y*0.5,d.z*BR.z*0.5));
-    const mid=a.clone().lerp(b,0.5).add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(0.5));
-    const len=10+(rnd()*6|0),gl=[];for(let j=0;j<len;j++)gl.push((rnd()*NG)|0);
-    streams.push({a,b,mid,t0:t+0.15+s*0.06+rnd()*0.2,dur:1.0+rnd()*0.5,len,gl,ev,done:false});}
+const ray=new T.Raycaster(),RC=new Map();
+function surfAt(y,lon){ // object-space surface point+normal at height y (pivot-centred) and longitude lon, cached
+  const key=Math.round(y*60)+'|'+Math.round(lon*60);if(RC.has(key))return RC.get(key);
+  const o=spin.localToWorld(new T.Vector3(Math.sin(lon)*9,y,Math.cos(lon)*9)),c=spin.localToWorld(new T.Vector3(0,y,0));
+  ray.set(o,c.sub(o).normalize());const h=ray.intersectObject(head,false)[0];let r=null;
+  if(h){const p=spin.worldToLocal(h.point.clone());const n=h.face.normal.clone();r={p,n};}
+  RC.set(key,r);return r;}
+function spawnReadout(t,visor){
+  const cd=camObjDir(),lonC=Math.atan2(cd.x,cd.z);let y,lon,len;
+  if(visor){y=2.30+rnd()*0.12;lon=-0.55+rnd()*0.55;len=5+(rnd()*6|0);}            // across the cap visor (front)
+  else{y=-0.6+rnd()*4.1;lon=lonC+(rnd()-0.5)*2.6;len=4+(rnd()*9|0);}             // anywhere on the camera-facing side
+  const pts=[];let l=lon;
+  for(let j=0;j<len;j++){const sAt=surfAt(y-PV.y,l);if(!sAt)break;pts.push(sAt);
+    const r=Math.hypot(sAt.p.x,sAt.p.z)||1;l+=0.125/r;}
+  if(pts.length<3)return;
+  const gl=pts.map(()=>(rnd()*NG)|0);
+  readouts.push({pts,gl,t0:t,type:0.25+rnd()*0.35,hold:0.9+rnd()*1.6,fade:0.5+rnd()*0.5,amp:0.8+rnd()*0.3});
 }
+function fireDelayed(t){fireLightning(t);}
 function jag(a,b,levels,amp){let pts=[a.clone(),b.clone()];let m=amp;
   for(let l=0;l<levels;l++){const np=[pts[0]];for(let i=0;i<pts.length-1;i++){const p=pts[i],q=pts[i+1];const mid=p.clone().lerp(q,0.5);
       const dir=q.clone().sub(p);const r=new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5);r.addScaledVector(dir.clone().normalize(),-r.dot(dir.clone().normalize()));
@@ -1713,15 +1715,15 @@ function fireLightning(t){
   for(let k=0;k<n;k++){let vi,tries=0;do{vi=(rnd()*NV)|0;tries++;}while(tries<400&&!(pos[vi*3+1]+PV.y>0.4&&(nrm[vi*3]*cd.x+nrm[vi*3+1]*cd.y+nrm[vi*3+2]*cd.z)>0.2));
     const nv=new T.Vector3(nrm[vi*3],nrm[vi*3+1],nrm[vi*3+2]);const b=new T.Vector3(pos[vi*3],pos[vi*3+1],pos[vi*3+2]).addScaledVector(nv,-0.03);
     const d=b.clone().sub(BC).normalize();const a=BC.clone().add(new T.Vector3(d.x*BR.x*0.55,d.y*BR.y*0.55,d.z*BR.z*0.55));
-    const delay=k*0.05+rnd()*0.08;
-    bolts.push({a,b,t0:t+delay,life:0.5+rnd()*0.25,paths:makeBoltPaths(a,b),restruck:false});
+    const delay=k*0.09+rnd()*0.14;
+    bolts.push({a,b,t0:t+delay,life:0.9+rnd()*0.45,paths:makeBoltPaths(a,b),strikes:0,fs:1,fnext:0});
     const h=HIT[hitSlot];hitSlot=(hitSlot+1)%HIT.length;h.set(b.x,b.y,b.z,t+delay);
-    for(let s=0;s<34;s++){const v=nv.clone().multiplyScalar(0.6+rnd()*1.6).add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(2.2));
-      sparks.push({p:b.clone(),v,t0:t+delay,life:0.45+rnd()*0.6,s:0.25+rnd()*0.45});}
+    for(let s=0;s<34;s++){const v=nv.clone().multiplyScalar(0.4+rnd()*1.0).add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(1.4));
+      sparks.push({p:b.clone(),v,t0:t+delay,life:0.75+rnd()*0.95,s:0.25+rnd()*0.45});}
     for(let s=0;s<14;s++){const v=d.clone().multiplyScalar(0.5+rnd()).add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(1.4));
-      sparks.push({p:a.clone(),v,t0:t+delay,life:0.35+rnd()*0.4,s:0.2+rnd()*0.3});}}
+      sparks.push({p:a.clone(),v:v.multiplyScalar(0.65),t0:t+delay,life:0.6+rnd()*0.65,s:0.2+rnd()*0.3});}}
 }
-window.GV={stream:()=>spawnEvent(curT),bolt:()=>fireLightning(curT),state:()=>({streams:streams.length,bolts:bolts.length,sparks:sparks.length,boltsFired})};
+window.GV={bolt:()=>fireLightning(curT),readout:(v)=>spawnReadout(curT,!!v),state:()=>({readouts:readouts.length,bolts:bolts.length,sparks:sparks.length,boltsFired})};
 // ---------- layout ----------
 let W=1,H=1,DPR=1;
 function resize(){
@@ -1738,28 +1740,31 @@ let ready=false,curT=0,last=0,start=0;
 const ease=s=>s<0?0:s>1?1:s*s*(3-2*s);
 function quad(a,m,b,s,out){const u=1-s;return out.set(u*u*a.x+2*u*s*m.x+s*s*b.x,u*u*a.y+2*u*s*m.y+s*s*b.y,u*u*a.z+2*u*s*m.z+s*s*b.z);}
 function render(t,dt){
-  curT=t;spin.rotation.y=reduce?0:t*2*Math.PI/SPIN_PERIOD;ringG.rotation.y=-t*0.05;
+  curT=t;spin.rotation.y=reduce?0:t*2*Math.PI/SPIN_PERIOD;
   tilt.updateMatrixWorld(true);
   if(!reduce){
-    if(nextEv===0)nextEv=t+0.8;
-    if(t>=nextEv){spawnEvent(t);nextEv=t+1+rnd()*2;}
+    if(nextRd===0){nextRd=t+0.3;nextBolt=t+1.6;}
+    if(t>=nextRd){spawnReadout(t,rnd()<0.45);if(rnd()<0.35)spawnReadout(t,rnd()<0.3);nextRd=t+0.28+rnd()*0.45;}
+    if(t>=nextBolt){fireLightning(t);nextBolt=t+4.5+rnd()*3.5;}   // own timer (~4.5-8s apart)
   }
-  // streams
-  streamPool.reset();
-  streams=streams.filter(s=>{const p=(t-s.t0)/s.dur;if(p>1.25){if(!s.done){s.done=true;s.ev.left--;flash=Math.min(1,flash+0.25);}return false;}
-    for(let j=0;j<s.len;j++){let u=p*1.5-j*0.045;let a=j===0?1:1-j/s.len*0.55;
-      if(u<0){if(p<0)a*=Math.min(1,(t-s.t0+0.4)/0.4);else a*=0.85;u=0;} if(u>1)continue;
-      if(t<s.t0-0.4)continue;
-      if(rnd()<0.06)s.gl[j]=(rnd()*NG)|0;
-      quad(s.a,s.mid,s.b,ease(u),V);streamPool.push(V.x,V.y,V.z,a*(u>0.85?(1-u)/0.15:1),j===0?1.7:1.35,s.gl[j]);}
+  // HUD readouts: short runs of bright glyphs typed onto the surface, glowing then fading
+  readPool.reset();
+  readouts=readouts.filter(r=>{const age=t-r.t0,tot=r.type+r.hold+r.fade;if(age>tot)return false;
+    const n=r.pts.length,shown=Math.min(n,Math.floor(age/r.type*n)+1);
+    const fade=age>r.type+r.hold?1-(age-r.type-r.hold)/r.fade:1;
+    for(let j=0;j<shown;j++){const q=r.pts[j];if(rnd()<0.04)r.gl[j]=(rnd()*NG)|0;
+      const cursor=(j===shown-1&&shown<n)?1.25:1,fl=0.85+0.15*Math.sin(t*14+j*1.7);
+      const a=r.amp*fade*fl*cursor*(j===0?1:0.88);
+      V.copy(q.p).addScaledVector(q.n,0.06);
+      readPool.push(V.x,V.y,V.z,a,1.15,r.gl[j]);}
     return true;});
-  streamPool.flush();
-  events=events.filter(e=>{if(e.left<=0){if(!reduce&&(boltsFired===0||(t-lastBolt>2.6&&rnd()<0.6)))setTimeout(()=>fireLightning(curT),120);return false;}return true;});
+  readPool.flush();
   // lightning
   glow.reset();let nl=0;
   bolts=bolts.filter(b=>{const age=t-b.t0;if(age>b.life)return false;if(age<0)return true;
-    if(!b.restruck&&age>b.life*0.4){b.paths=makeBoltPaths(b.a,b.b);b.restruck=true;}
-    const fl=(rnd()<0.22?0.35:1)*Math.pow(1-age/b.life,0.6);
+    if(b.strikes<2&&age>b.life*(b.strikes?0.68:0.34)){b.paths=makeBoltPaths(b.a,b.b);b.strikes++;}
+    if(t>=b.fnext){b.fs=rnd()<0.25?0.4:1;b.fnext=t+0.06+rnd()*0.08;}
+    const fl=b.fs*Math.pow(1-age/b.life,0.6);
     for(const P of b.paths){const pts=P.p;
       for(let i=0;i<pts.length-1;i++){const p=pts[i],q=pts[i+1];
         if(nl<3000){BL.set([p.x,p.y,p.z,q.x,q.y,q.z],nl*6);nl++;}
@@ -1771,16 +1776,13 @@ function render(t,dt){
   boltLineG.setDrawRange(0,nl*2);boltLineG.attributes.position.needsUpdate=true;
   boltLineMat.opacity=nl?0.9:0;
   sparks=sparks.filter(s=>{const age=t-s.t0;if(age>s.life)return false;if(age<0)return true;
-    const k=age;V.copy(s.p).addScaledVector(s.v,k*(1-0.35*k));const a=Math.pow(1-age/s.life,1.4);
+    const k=age;V.copy(s.p).addScaledVector(s.v,k*(1-0.25*k));const a=Math.pow(1-age/s.life,1.4);
     glow.push(V.x,V.y,V.z,a,s.s,[0.75,1,0.8]);glow.push(V.x,V.y,V.z,a*0.25,s.s*3,[0.1,1,0.45]);return true;});
   glow.flush();
   // brain
-  flash=Math.max(0,flash-dt*1.6);const pulse=0.75+0.25*Math.sin(t*2.4);
+  flash=Math.max(0,flash-dt*1.0);const pulse=0.75+0.25*Math.sin(t*2.4);
   flashU.value=flash;timeU.value=t;brain.material.uniforms.uMul.value=(0.22+0.6*flash)*pulse;
   brainLineMat.opacity=(0.16+0.5*flash)*pulse;brainGlow.material.opacity=0.22+0.6*flash;const gs=2.6+flash*1.8+pulse*0.3;brainGlow.scale.set(gs,gs*0.8,1);
-  // stars + ring
-  if(!ring.count){for(const r of ringData)ring.push(Math.cos(r[0])*r[1],r[2],Math.sin(r[0])*r[1],r[4],0.55,r[3]);ring.flush();}
-  else if(!reduce){for(let k=0;k<15;k++)ring.X[(rnd()*ring.count)|0]=(rnd()*NG)|0;ring.g.attributes.aG.needsUpdate=true;}
   headU.uTime.value=t;headU.uFlash.value=flash;
   renderer.render(scene,camera);
 }
