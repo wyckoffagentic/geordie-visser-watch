@@ -42,7 +42,7 @@ footer a{color:#4f8f68}
 </section>
 <header>
   <h1 class="title">Geordie Visser Watch</h1>
-  <p>Research notes on Jordi “Geordie” Visser — macro, AI &amp; crypto commentary · built 2026-10-12 08:50</p>
+  <p>Research notes on Jordi “Geordie” Visser — macro, AI &amp; crypto commentary · built 2026-10-12 09:20</p>
 </header>
 <main>
   <section id="thesis">
@@ -1527,6 +1527,7 @@ let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(resize,80)}
 }
 /* Jordi Visser hero v2: 3D code-glyph head (LeePerrySmith mesh + projected photo) spinning like a planet,
    with a glowing brain inside, slow lightning arcing from brain to skull, and HUD-style glyph readouts on the head/visor. three.js r147.
+   v4: living brain - noise waves, synapse firings, pulses along neural paths, charge-up before strikes, softer afterglow.
    v3: streams + glyph ring removed (v2 kept in hero3d_v2.js). */
 (()=>{
 const cv=document.getElementById('c'),hero=document.getElementById('hero');
@@ -1639,14 +1640,38 @@ for(let i=0;i<5200;i++){let x,y,z,l;do{x=rnd()*2-1;y=rnd()*2-1;z=rnd()*2-1;l=x*x
   brainPts.push([BC.x+(p[0]-BC.x)*inner,BC.y+(p[1]-BC.y)*inner,BC.z+(p[2]-BC.z)*inner,inner<1?0.35:1]);}
 for(let i=0;i<900;i++){const a=rnd()*6.283,r=Math.sqrt(rnd()); // cerebellum
   brainPts.push([BC.x+Math.cos(a)*r*0.75,BC.y-0.72+Math.sin(a)*r*0.25,BC.z-0.95+ (rnd()-0.5)*0.4,0.7]);}
-{const lp=[];for(const side of [-1,1]){for(let k=1;k<12;k++){const ang=-1.2+k*0.2;const ring=[];
+const BRU={uPx:null,uT:{value:0},uF:{value:0},uC:{value:0},uBC:{value:BC}};
+const BRAIN_GLSL=`uniform float uPx,uT,uF,uC;uniform vec3 uBC;
+float waves(vec3 q){ // slow organic light waves: front-to-back + side-to-side, warped
+  float a=0.5+0.5*sin(q.z*2.6-uT*1.25+sin(q.x*1.7+uT*0.41)*1.3);
+  float b=0.5+0.5*sin(q.x*3.1+uT*0.83+q.y*2.0+sin(q.z*2.2-uT*0.6));
+  float c=0.5+0.5*sin(q.y*3.7+q.z*1.4+uT*0.57);
+  return clamp(a*0.55+b*0.30+c*0.15,0.,1.);}
+`;
+const BRAIN_FS=`uniform float uT,uC;varying float vA;varying float vH;
+void main(){vec3 g0=vec3(0.12,1.,0.48),g1=vec3(0.55,1.,0.95);float br=0.5+0.5*sin(uT*0.9);
+ vec3 c=mix(g0,g1,clamp(vH*0.85+br*0.12,0.,0.9));
+ #ifdef PTS
+ float d=length(gl_PointCoord-.5);float g=smoothstep(.5,0.,d);c*=g*g;
+ #endif
+ gl_FragColor=vec4(c*vA,1.);}`;
+{const lp=[],lu=[],lr=[];const addRing=ring=>{const rr=rnd();for(let j=0;j<ring.length-1;j++){lp.push(...ring[j],...ring[j+1]);lu.push(j/(ring.length-1),(j+1)/(ring.length-1));lr.push(rr,rr);}};
+ for(const side of [-1,1]){for(let k=1;k<12;k++){const ang=-1.2+k*0.2;const ring=[];
    for(let j=0;j<=48;j++){const th=j/48*Math.PI;const dx=side*Math.sin(th)*Math.cos(ang),dy=Math.sin(ang),dz=Math.cos(th)*Math.cos(ang);ring.push(brainSurf(dx*1.0,dy,dz,side));}
-   for(let j=0;j<ring.length-1;j++)lp.push(...ring[j],...ring[j+1]);}
+   addRing(ring);}
   for(let k=0;k<10;k++){const th=0.15+k/9*(Math.PI-0.3);const ring=[];
    for(let j=0;j<=36;j++){const ang=-1.25+j/36*2.6;ring.push(brainSurf(side*Math.sin(th)*Math.cos(ang),Math.sin(ang),Math.cos(th)*Math.cos(ang),side));}
-   for(let j=0;j<ring.length-1;j++)lp.push(...ring[j],...ring[j+1]);}}
+   addRing(ring);}}
  const lg=new T.BufferGeometry();lg.setAttribute('position',new T.Float32BufferAttribute(lp,3));
- var brainLineMat=new T.LineBasicMaterial({color:0x33ff99,transparent:true,opacity:0.28,blending:T.AdditiveBlending,depthWrite:false,depthTest:false});
+ lg.setAttribute('aU',new T.Float32BufferAttribute(lu,1));lg.setAttribute('aR',new T.Float32BufferAttribute(lr,1));
+ var brainLineMat=new T.ShaderMaterial({uniforms:BRU,vertexShader:BRAIN_GLSL+`attribute float aU;attribute float aR;varying float vA;varying float vH;
+  void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;
+   float w=waves(position-uBC);float sp=0.18+aR*0.32;
+   float p1=fract(aU-uT*sp+aR*7.),p2=fract(aU*1.0+uT*sp*0.7+aR*13.);       // two pulses per path, opposite directions
+   float gate=step(0.45,fract(sin(floor(uT*0.35+aR*9.)*91.7+aR*311.)*4375.5)); // only some paths carry pulses at a time
+   float pulse=(smoothstep(0.09,0.,p1)+smoothstep(0.06,0.,p2)*0.7)*(gate*0.85+0.15+uC*0.9);
+   vA=0.08+0.26*w*w+0.22*uC+0.12*uF+pulse*(0.65+0.4*uC);vH=clamp(pulse*0.9+uC*0.35*w+uF*0.25,0.,1.);}`,
+  fragmentShader:BRAIN_FS,transparent:true,depthWrite:false,depthTest:false,blending:T.AdditiveBlending});
  const ls=new T.LineSegments(lg,brainLineMat);ls.renderOrder=1;spin.add(ls);}
 const flashU={value:0},timeU={value:0};
 function staticGlow(list,order){ // list: [x,y,z,alpha,size,phase]
@@ -1660,7 +1685,23 @@ function staticGlow(list,order){ // list: [x,y,z,alpha,size,phase]
    fragmentShader:`uniform vec3 uC0,uC1;uniform float uF;varying float vA;void main(){float d=length(gl_PointCoord-.5);float g=smoothstep(.5,0.,d);gl_FragColor=vec4(mix(uC0,uC1,uF*0.8)*g*g*vA,1.);}`,
    transparent:true,depthWrite:false,depthTest:false,blending:T.AdditiveBlending});
   const pts=new T.Points(g,mat);pts.renderOrder=order;pts.frustumCulled=false;return pts;}
-const brain=staticGlow(brainPts.map(b=>[b[0],b[1],b[2],b[3],0.42,b[0]*7+b[2]*5]),1);spin.add(brain);
+BRU.uPx=pxU;
+const brain=(()=>{const n=brainPts.length,g=new T.BufferGeometry(),P=new Float32Array(n*3),A=new Float32Array(n),Ph=new Float32Array(n);
+  brainPts.forEach((b,i)=>{P.set([b[0],b[1],b[2]],i*3);A[i]=b[3];Ph[i]=rnd()*100;});
+  g.setAttribute('position',new T.BufferAttribute(P,3));g.setAttribute('aA',new T.BufferAttribute(A,1));g.setAttribute('aPh',new T.BufferAttribute(Ph,1));
+  const mat=new T.ShaderMaterial({uniforms:BRU,defines:{PTS:1},vertexShader:BRAIN_GLSL+`attribute float aA;attribute float aPh;varying float vA;varying float vH;
+   void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;
+    float w=waves(position-uBC);
+    float ph=uT*(3.5+uC*4.)+aPh*3.17,slot=floor(ph);                 // synapse firing: random sparse spikes, more during charge
+    float hs=fract(sin(slot*12.9898+aPh*78.233)*43758.5453);
+    float fire=step(0.986-0.05*uC,hs)*pow(1.-fract(ph),2.);
+    float breathe=0.86+0.14*sin(uT*1.1);
+    vA=aA*(0.13+0.40*w*w+0.26*uC+0.16*uF)*breathe+fire*1.05;
+    vH=clamp(fire+uC*0.45*w+uF*0.3,0.,1.);
+    gl_PointSize=max(1.,uPx*(0.40+fire*0.7+uC*0.08)*(19./-mv.z));}`,
+   fragmentShader:BRAIN_FS,transparent:true,depthWrite:false,depthTest:false,blending:T.AdditiveBlending});
+  const pts=new T.Points(g,mat);pts.renderOrder=1;pts.frustumCulled=false;return pts;})();spin.add(brain);
+const brainSurfPts=brainPts.filter(b=>b[3]===1);
 
 const brainGlowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const a=c.getContext('2d');const g=a.createRadialGradient(64,64,0,64,64,64);
  g.addColorStop(0,'rgba(200,255,220,1)');g.addColorStop(.25,'rgba(60,255,150,.5)');g.addColorStop(1,'rgba(0,120,60,0)');a.fillStyle=g;a.fillRect(0,0,128,128);return new T.CanvasTexture(c);})();
@@ -1677,6 +1718,7 @@ const glow=pool(9000,false,{order:5});spin.add(glow.pts);
 const boltLineG=new T.BufferGeometry();const BL=new Float32Array(6*3000);boltLineG.setAttribute('position',new T.BufferAttribute(BL,3).setUsage(T.DynamicDrawUsage));
 const boltLineMat=new T.LineBasicMaterial({color:0xf2fff6,transparent:true,opacity:1,blending:T.AdditiveBlending,depthTest:false,depthWrite:false});
 const boltLines=new T.LineSegments(boltLineG,boltLineMat);boltLines.frustumCulled=false;boltLines.renderOrder=6;spin.add(boltLines);
+const CHARGE=0.85;let charge=0,arcs=[],arcAcc=0;
 let readouts=[],bolts=[],sparks=[],nextRd=0,nextBolt=0,lastBolt=-99,flash=0,hitSlot=0,boltsFired=0;
 const V=new T.Vector3();
 function camObjDir(){const c=spin.worldToLocal(camera.position.clone());return c.normalize();}
@@ -1723,7 +1765,8 @@ function fireLightning(t){
     for(let s=0;s<14;s++){const v=d.clone().multiplyScalar(0.5+rnd()).add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(1.4));
       sparks.push({p:a.clone(),v:v.multiplyScalar(0.65),t0:t+delay,life:0.6+rnd()*0.65,s:0.2+rnd()*0.3});}}
 }
-window.GV={bolt:()=>fireLightning(curT),readout:(v)=>spawnReadout(curT,!!v),state:()=>({readouts:readouts.length,bolts:bolts.length,sparks:sparks.length,boltsFired})};
+let forceCharge=null; // debug/screenshot hook only
+window.GV={charge:()=>{nextBolt=curT+CHARGE;},hold:(c)=>{forceCharge=c;nextBolt=curT+999;},release:()=>{forceCharge=null;nextBolt=curT;},bolt:()=>fireLightning(curT),readout:(v)=>spawnReadout(curT,!!v),state:()=>({readouts:readouts.length,bolts:bolts.length,sparks:sparks.length,boltsFired})};
 // ---------- layout ----------
 let W=1,H=1,DPR=1;
 function resize(){
@@ -1745,7 +1788,7 @@ function render(t,dt){
   if(!reduce){
     if(nextRd===0){nextRd=t+0.3;nextBolt=t+1.6;}
     if(t>=nextRd){spawnReadout(t,rnd()<0.45);if(rnd()<0.35)spawnReadout(t,rnd()<0.3);nextRd=t+0.28+rnd()*0.45;}
-    if(t>=nextBolt){fireLightning(t);nextBolt=t+4.5+rnd()*3.5;}   // own timer (~4.5-8s apart)
+    if(t>=nextBolt){fireLightning(t);nextBolt=t+4.5+rnd()*3.5;}   // own timer (~4.5-8s apart); charge-up starts CHARGE s before
   }
   // HUD readouts: short runs of bright glyphs typed onto the surface, glowing then fading
   readPool.reset();
@@ -1778,11 +1821,20 @@ function render(t,dt){
   sparks=sparks.filter(s=>{const age=t-s.t0;if(age>s.life)return false;if(age<0)return true;
     const k=age;V.copy(s.p).addScaledVector(s.v,k*(1-0.25*k));const a=Math.pow(1-age/s.life,1.4);
     glow.push(V.x,V.y,V.z,a,s.s,[0.75,1,0.8]);glow.push(V.x,V.y,V.z,a*0.25,s.s*3,[0.1,1,0.45]);return true;});
+  // brain synapse arcs: tiny jagged sparks hopping between nearby surface points
+  charge=reduce?0:Math.max(0,Math.min(1,1-(nextBolt-t)/CHARGE));charge*=charge;if(forceCharge!==null)charge=forceCharge;
+  if(!reduce){arcAcc+=dt*(9+30*charge);while(arcAcc>1){arcAcc--;const b=brainSurfPts[(rnd()*brainSurfPts.length)|0];
+    const a=new T.Vector3(b[0],b[1],b[2]),e=a.clone().add(new T.Vector3(rnd()-0.5,rnd()-0.5,rnd()-0.5).multiplyScalar(0.32+0.2*charge));
+    arcs.push({p:jag(a,e,3,0.35),t0:t,life:0.07+rnd()*0.12});}}
+  arcs=arcs.filter(a=>{const age=t-a.t0;if(age>a.life)return false;const k=1-age/a.life;
+    for(let i=0;i<a.p.length-1;i++){const p=a.p[i],q=a.p[i+1];for(let s=0;s<3;s++){V.copy(p).lerp(q,s/3);
+      glow.push(V.x,V.y,V.z,0.85*k,0.17,[0.6,1,0.95]);if(s===0)glow.push(V.x,V.y,V.z,0.16*k,0.9,[0.1,1,0.6]);}}return true;});
   glow.flush();
   // brain
   flash=Math.max(0,flash-dt*1.0);const pulse=0.75+0.25*Math.sin(t*2.4);
-  flashU.value=flash;timeU.value=t;brain.material.uniforms.uMul.value=(0.22+0.6*flash)*pulse;
-  brainLineMat.opacity=(0.16+0.5*flash)*pulse;brainGlow.material.opacity=0.22+0.6*flash;const gs=2.6+flash*1.8+pulse*0.3;brainGlow.scale.set(gs,gs*0.8,1);
+  flashU.value=flash;timeU.value=t;BRU.uT.value=t;BRU.uF.value=flash;BRU.uC.value=charge;
+  const cy=0.5+0.5*Math.sin(t*0.9);brainGlow.material.color.setRGB(0.55+0.25*cy+0.2*charge,1,0.75+0.25*cy);
+  brainGlow.material.opacity=(0.16+0.06*pulse)+0.22*flash+0.32*charge;const gs=2.6+pulse*0.3+flash*0.7+charge*0.7;brainGlow.scale.set(gs,gs*0.8,1);
   headU.uTime.value=t;headU.uFlash.value=flash;
   renderer.render(scene,camera);
 }
