@@ -1,4 +1,4 @@
-# Geordie Visser Watch
+# Jordi Visser Watch
 
 A single self-contained research page, published via GitHub Pages.
 
